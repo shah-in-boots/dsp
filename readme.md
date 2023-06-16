@@ -113,3 +113,6 @@ MARS Holter ECG system has raw binary files stores in the MIT-BIH signal format 
 Need to assess how to read-in the .sig and .hdr filetypes, currently stored in the raw data folder.
 
 
+# ECG analysis
+
+Will be using WFDB
