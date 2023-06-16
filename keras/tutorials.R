@@ -1,4 +1,5 @@
 # Initial libraries 
+library(reticulate)
 library(tensorflow)
 library(keras)
 
@@ -16,9 +17,8 @@ y_test <- dat$test$y
 x_train <- x_train / 255
 x_test <- x_test / 255
 
-# The training data is 28 columns
-
 # Build a sequential model of stacking layers
+# The training data is 28 columns
 model <-
 	keras_model_sequential(input_shape = c(28, 28)) |>
 	layer_flatten() |>
@@ -32,5 +32,6 @@ predictions
 # Uses the soft max predictions
 tf$nn$softmax(predictions)
 
-
 # Loss function...
+loss_fn <-
+	loss_sparse_categorical_crossentropy(from_logits = TRUE)
