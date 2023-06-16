@@ -1,4 +1,4 @@
-# Initial libraries 
+# Initial libraries for tensorflow
 library(reticulate)
 library(tensorflow)
 library(keras)
@@ -35,3 +35,24 @@ tf$nn$softmax(predictions)
 # Loss function...
 loss_fn <-
 	loss_sparse_categorical_crossentropy(from_logits = TRUE)
+
+# Expect about loss of log(1/10 ~= 2.3) because there is about 1/10 error
+loss_fn(y_train[1:2], predictions)
+
+# Compile model
+model |>
+	compile(optimizer = 'adam',
+					loss = loss_fn,
+					metrics = 'accuracy')
+
+# Training and fitting model
+model |> fit(x_train, y_train, epoch = 5)
+model |> evaluate(x_test, y_test, verbose = 2)
+
+prob_model <-
+	keras_model_sequential() |>
+	model() |>
+	layer_activation_softmax() |>
+	layer_lambda(tf$argmax)
+
+prob_model(x_test[1:5, , ])
