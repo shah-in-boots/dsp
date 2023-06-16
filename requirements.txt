@@ -1,0 +1,5 @@
+keras==2.13.1rc0
+tensorflow==2.13.0rc1
+tensorflow-macos==2.13.0rc1
+numpy==1.24.3
+
