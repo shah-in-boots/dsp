@@ -113,6 +113,10 @@ MARS Holter ECG system has raw binary files stores in the MIT-BIH signal format 
 Need to assess how to read-in the .sig and .hdr filetypes, currently stored in the raw data folder.
 
 
-# ECG analysis
+# ECG data
 
-Will be using WFDB
+Stored in the HIPAA/PHI-safe data folder. Individual files are likely in WFDB format with appropriate annotation (or in XML format to be converted).
+
+- **qtdb** = PhysioNet QTDB with manual annotation of beat onsets and offsets
+- **ludb** = IEEE ECG delineation algorithm paper dataset
+
