@@ -19,7 +19,7 @@ for (i in seq_along(filePaths)) {
 		type = "muse",
 		record = fileNames[i],
 		record_dir = folder,
-		wfdb_path = "/usr/local/bin",
+		wfdb_path = "/shared/home/ashah282/bin",
 		header = hea
 	)
 
