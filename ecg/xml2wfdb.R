@@ -22,5 +22,5 @@ for (i in seq_along(filePaths)) {
 		wfdb_path = "/usr/local/bin",
 		header = hea
 	)
-	
+
 }
