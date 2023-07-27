@@ -1,7 +1,10 @@
-# Initial libraries for tensorflow
+# Library setup ----
 library(reticulate)
 library(tensorflow)
+library(tfdatasets)
 library(keras)
+
+# Beginner introduction ----
 
 # Check to make sure its working
 tf$constant("Hello Tensorflow!")
@@ -56,3 +59,14 @@ prob_model <-
 	layer_lambda(tf$argmax)
 
 prob_model(x_test[1:5, , ])
+
+# Advanced introduction ----
+
+# This is above my level thus far
+
+# Image classification ----
+
+fashion_mnist <- keras::dataset_fashion_mnist()
+
+c(train_images, train_labels) %<-% fashion_mnist$train
+c(test_images, test_labels) %<-% fashion_mnist$test
