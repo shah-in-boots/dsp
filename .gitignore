@@ -6,4 +6,5 @@
 .venv/*
 
 # Large datasets
-./tensorflow/aclimdb/*
+tensorflow/aclimdb
+tensorflow/aclimdb/*
