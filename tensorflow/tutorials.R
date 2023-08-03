@@ -218,3 +218,189 @@ list.files(train_dir)
 
 sample_file <- file.path(train_dir, 'pos/1181_9.txt')
 readr::read_file(sample_file)
+
+# Remove useless files and folders
+# Then split the data... train, validate, test
+remove_dir <- file.path(train_dir, 'unsup')
+unlink(remove_dir, recursive = TRUE)
+
+# Get text files from the directory structure
+# There are 25k examples, and will use 80% for training
+# Generating training data
+batch_size <- 32
+seed <- 42
+raw_train_ds <- keras::text_dataset_from_directory(
+	train_dir,
+	batch_size = batch_size,
+	validation_split = 0.2,
+	subset = 'training',
+	seed = seed
+)
+
+batch <- 
+	raw_train_ds |>
+	reticulate::as_iterator() |>
+	coro::collect()
+
+# Example of the review data
+# Text contains raw text and occ HTML tags
+# Class names are also present in raw train data
+batch[[1]][[1]][1] # Review
+batch[[1]][[2]][1] # Shape of object
+cat("Label 0 corresponds to", raw_train_ds$class_names[1])
+cat("Label 1 corresponds to", raw_train_ds$class_names[2])
+
+# Create a validation set
+raw_val_ds <- keras::text_dataset_from_directory(
+	train_dir,
+	batch_size = batch_size,
+	validation_split = 0.2,
+	subset = 'validation',
+	seed = seed
+)
+
+# Create test data set
+raw_test_ds <- keras::text_dataset_from_directory(
+	train_dir,
+	batch_size = 32
+)
+
+# Since the data is text, needs to be cleaned/prepared
+# Need to remove punctuation or HTML elements
+# Then tokenize strings into tokens using a function
+# Subsequently vectorized for feeding into neural network
+re <- reticulate::import('re')
+punctuation <- c("!", "\\", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "\\", "]", "^", "_", "`", "{", "|", "}", "~")
+
+punctuation_group <- 
+	punctuation |>
+	sapply(re$escape) |> # Adds escape before character
+	paste0(collapse = "") |> # Collapses them
+	sprintf(fmt = "[%s]")
+
+standardize_text <- function(x) {
+	lowercase <- tf$strings$lower(x)
+	stripped_html <- tf$strings$regex_replace(lowercase, '<br />', ' ')
+	tf$strings$regex_replace(
+		stripped_html,
+		punctuation_group,
+		""
+	)
+}
+
+# Will need to create a `TextVectorization` layer...
+# Each token will get an index value as an integer
+max_features <- 1e4
+sequence_length <- 250 # Length of characters
+vectorize_layer <- keras::layer_text_vectorization(
+	standardize = standardize_text,  # Our custom function to make tokens
+	max_tokens = max_features,
+	output_mode = "int",
+	output_sequence_length = sequence_length
+)
+
+# Next need to `adapt()` data from preprocessing into dataset
+# Converts everything from strings -> integers
+train_text <- 
+	raw_train_ds |>
+	dataset_map(function(text, label) { text })
+
+vectorize_layer |>
+	adapt(train_text)
+
+vectorize_text <- function(text, label) {
+	text <- tf$expand_dims(text, -1L)
+	list(vectorize_layer(text), label)
+}
+
+# We can check to see how this looks
+# Get a batch of 32 reviews + labels and evaluate them as vectors
+# Also can evaluate what an integer value corresponds too
+batch <- 
+	reticulate::as_iterator(raw_train_ds) |>
+	reticulate::iter_next()
+
+first_review <- as.array(batch[[1]][1])
+first_label <- as.array(batch[[2]][1])
+cat("Review:", first_review)
+cat("Label:", raw_train_ds$class_names[first_label + 1])
+cat("Vectorized review:\n")
+print(vectorize_text(first_review, first_label))
+
+cat("9257 -->", get_vocabulary(vectorize_layer)[9257 + 1])
+cat("15 -->", get_vocabulary(vectorize_layer)[15 + 1])
+cat("Vocabulary size:", length(get_vocabulary(vectorize_layer)))
+
+# Now can apply text vectorization
+train_ds <- raw_train_ds |> dataset_map(vectorize_text)
+val_ds <- raw_val_ds |> dataset_map(vectorize_text)
+test_ds <- raw_test_ds |> dataset_map(vectorize_text)
+
+# Now, the file size is very large overall
+# We can put data on a cache to help with speed
+at <- tf$data$AUTOTUNE
+train_ds <- train_ds |> dataset_cache() |> dataset_prefetch(buffer_size = at)
+val_ds <- val_ds |> dataset_cache() |> dataset_prefetch(buffer_size = at)
+test_ds <- test_ds |> dataset_cache() |> dataset_prefetch(buffer_size = at)
+
+
+# Creating the model
+model <-
+	# Uses sequential modeling layers
+	keras_model_sequential() |>
+	# Then, creates first dense layer for embeddings
+	# Takes integer-encoded reviews
+	# Looks up embedding vector for each word index
+	# These vectors are learned as model trains
+	# Result dimensions = (batch, sequence, embedding0)
+	layer_embedding(input_dim = max_features + 1, output_dim = 16) |>
+	layer_dropout(0.2) |>
+	# Global pool returns fixed length output vector
+	# Averages over teh sequence dimensions
+	# Allows model to handle variable length input
+	layer_global_average_pooling_1d() |>
+	# Piped down to 16 hidden unit dense layers
+	layer_dropout(0.2) |>
+	# Last layer is a single output node
+	layer_dense(1)
+
+# Loss function... binary since its a classificatin problem
+model |>
+	compile(
+		loss = loss_binary_crossentropy(from_logits = TRUE),
+		optimizer = 'adam',
+		metrics = metric_binary_accuracy(threshold = 0)
+	)
+
+# Training the model over epochs
+history <- 
+	model |>
+	fit(train_ds, validation_data = val_ds, epochs = 10)
+plot(history)
+
+# Evaluate model for performance by LOSS (error) and ACCURACY
+model |> evaluate(test_ds)
+
+# Exporting the model with the text vectorization layer
+# For it to work with raw strings (instead of processed) can give it this fn
+export_model <-
+	keras_model_sequential() |>
+	vectorize_layer() |>
+	model() |>
+	layer_activation(activation = 'sigmoid') |>
+	compile(
+		loss = loss_binary_crossentropy(from_logits = FALSE),
+		optimizer = 'adam',
+		metrics = 'accuracy'
+	)
+
+export_model |>
+	evaluate(raw_test_ds)
+
+examples <- c(
+	"The movie was great!",
+	"The movie was okay.",
+	"The movie was terrible..."
+)
+
+predict(export_model, examples)
