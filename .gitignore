@@ -4,3 +4,6 @@
 .Ruserdata
 .venv
 .venv/*
+
+# Large datasets
+./tensorflow/aclimdb/*
