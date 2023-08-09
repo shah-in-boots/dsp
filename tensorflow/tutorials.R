@@ -3,6 +3,8 @@ library(reticulate)
 library(tensorflow)
 library(tfdatasets)
 library(keras)
+library(tidyverse)
+library(tidymodels)
 
 # Beginner introduction ----
 
@@ -404,3 +406,279 @@ examples <- c(
 )
 
 predict(export_model, examples)
+
+# Basic Regression ----
+
+# Cars dataset
+url <-
+	"http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data"
+
+col_names <-
+	c(
+		"mpg",
+		"cylinders",
+		"displacement",
+		"horsepower",
+		"weight",
+		"acceleration",
+		"model_year",
+		"origin",
+		"car_name"
+	)
+
+raw_dataset <- read.table(
+	url,
+	header = TRUE,
+	col.names = col_names,
+	na.strings = "?"
+)
+
+dataset <- select(raw_dataset, -car_name)
+
+## Data preparation ----
+
+# Clean data, as has 6 rows with missing information
+lapply(dataset, function(.x) sum(is.na(.x))) |> str()
+dataset <- na.omit(dataset)
+
+# Add one-hot encoding for the origin of the car
+dataset <-
+	recipe(mpg ~ ., dataset) |>
+	step_num2factor(origin, levels = c("USA", "Europe", "Japan")) |>
+	step_dummy(origin, one_hot = TRUE) |>
+	prep() |>
+	bake(new_data = NULL)
+	
+# Split data into training and test sets
+split <- initial_split(dataset, 0.8)
+train_dataset <- training(split)
+test_dataset <- testing(split)
+
+# Evaluate the overall patterns in the data
+skimr::skim(train_dataset)
+x <-
+	train_dataset |>
+	corrr::correlate() |>
+	corrr::focus(-model_year, -origin, mirror = TRUE) |>
+	corrr::rearrange() |>
+	corrr::shave()
+
+corrr::fashion(x)
+corrr::rplot(x)
+
+# Get label values off of data, will need this for training and testing
+train_features <- select(train_dataset, -mpg)
+test_features <- select(test_dataset, -mpg)
+
+train_labels <- select(train_dataset, mpg)
+test_labels <- select(test_dataset, mpg)
+
+# Can use keras to normalize data in a layer
+# Normalize data to help with training to avoid scaling issues
+# Needs to preprocess the data
+normalizer <- layer_normalization(axis = -1L)
+normalizer |> adapt(as.matrix(train_features)) # Stores mean/variance in layer
+print(normalizer$mean)
+first <- as.matrix(train_features[1, ])
+cat('First example:', first)
+cat('Normalized:', as.matrix(normalizer(first)))
+
+## Single linear regression ----
+
+# Lets try to predict `mpg` from `horsepower`
+# Requires two steps...
+# 	Normalize the `horsepower` feature
+# 	Apply linear transformation with `y = mx + b` to create one output (dense)
+horsepower <- matrix(train_features$horsepower)
+horsepower_normalizer <- layer_normalization(input_shape = shape(1), axis = NULL)
+horsepower_normalizer |> adapt(horsepower)
+
+# Next need to create keras model
+horsepower_model <-
+	keras_model_sequential() |>
+	horsepower_normalizer() |>
+	layer_dense(units = 1)
+summary(horsepower_model)
+
+# As a toy example, can run it on a tiny subset of data
+predict(horsepower_model, horsepower[1:10, ])
+
+# Compile and then train/fit
+horsepower_model |>
+	compile(
+		optimizer = optimizer_adam(learning_rate = 0.1),
+		loss = 'mean_absolute_error'
+	)
+
+history <-
+	horsepower_model |>
+	fit(
+		as.matrix(train_features$horsepower),
+		as.matrix(train_labels),
+		epochs = 100,
+		verbose = 0,
+		validation_split = 0.2
+	)
+
+plot(history)
+
+# Test results can be saved
+test_results <- list()
+test_results[['horsepower_model']] <-
+	horsepower_model |>
+	evaluate(as.matrix(test_features$horsepower),
+					 as.matrix(test_labels),
+					 verbose = 1)
+
+# The model is a single linear variable
+# Can visualize predictions based on a single input
+x <- seq(0, 250, length.out = 251)
+y <- predict(horsepower_model, x)
+ggplot(train_dataset) +
+	geom_point(aes(x = horsepower, y = mpg, color = 'data')) +
+	geom_line(data = data.frame(x, y), aes(x = x, y = y, color = 'prediction'))
+
+## Multiple linear regression ----
+
+# It will produce 1 output based on the dense layer
+linear_model <-
+	keras_model_sequential() |>
+	normalizer() |> # Defined earlier
+	layer_dense(units = 1)
+
+# Should output 10 rows and 1 column
+predict(linear_model, as.matrix(train_features[1:10, ]))
+
+# The kernal weights should have shape of [9, 1]
+linear_model$layers[[2]]$kernel 
+
+# Compile, fit, and save results
+linear_model |>
+	compile(
+		optimizer = optimizer_adam(learning_rate = 0.1),
+		loss = 'mean_absolute_error'
+	)
+
+history <-
+	linear_model |>
+	fit(
+		as.matrix(train_features),
+		as.matrix(train_labels),
+		epochs = 50,
+		verbose = 1,
+		validation_split = 0.2
+	)
+
+plot(history)
+
+test_results[['linear_model']] <- 
+	linear_model |>
+	evaluate(as.matrix(test_features),
+					 as.matrix(test_labels),
+					 verbose = 0)
+
+## Deep neural network (DNN) ----
+
+# Can also make single and multiple input DNN models
+# Similar to linear models except there are now hidden layers
+# 	Normalization layer
+# 	Two hidden, non-linear DENSE layers using ReLU activation
+#		Linear DENSE single output layer
+# Hidden = not directly connected to input or outputs
+
+build_and_compile_model <- function(norm) {
+	model <-
+		keras_model_sequential() |>
+		norm() |>
+		layer_dense(64, activation = 'relu') |>
+		layer_dense(64, activation = 'relu') |>
+		layer_dense(1)
+	
+	model |>
+		compile(
+			loss = 'mean_absolute_error',
+			optimizer = optimizer_adam(0.001)
+		)
+	
+	model
+}
+
+# Include previously made normalization layer
+dnn_hp_model <- build_and_compile_model(horsepower_normalizer)
+
+# Has many more parameters than ca be trained
+summary(dnn_hp_model)
+history <- 
+	dnn_hp_model |>
+	fit(
+		as.matrix(train_features$horsepower),
+		as.matrix(train_labels),
+		validation_split = 0.2,
+		verbose = 0,
+		epochs = 100
+	)
+
+# Can see that it is quicker to train and less linear (better fit)
+plot(history)
+x <- seq(0, 250)
+y <- predict(dnn_hp_model, x)
+ggplot(train_dataset) + 
+	geom_point(aes(x = horsepower, y = mpg, color = 'data')) +
+	geom_line(data = data.frame(x, y), aes(x = x, y = y, color = 'prediction'))
+
+test_results[['dnn_hp_model']] <- 
+	dnn_hp_model |> 
+	evaluate(
+		as.matrix(test_features$horsepower),
+		as.matrix(test_labels),
+		verbose = 0
+	)
+
+# Also works for all features, not just horsepower
+dnn_model <- build_and_compile_model(normalizer)
+summary(dnn_model)
+history <- 
+	dnn_model |>
+	fit(
+		as.matrix(train_features),
+		as.matrix(train_labels),
+		validation_split = 0.2,
+		verbose = 0,
+		epochs = 100
+	)
+
+# Can see that it is quicker to train and less linear (better fit)
+plot(history)
+
+test_results[['dnn_model']] <- 
+	dnn_model |> 
+	evaluate(
+		as.matrix(test_features),
+		as.matrix(test_labels),
+		verbose = 0
+	)
+
+## Performance ----
+
+print(test_results)
+
+# Predictions
+test_predictions <- predict(dnn_model, as.matrix(test_features))
+ggplot(data.frame(pred = as.numeric(test_predictions), mpg = test_labels$mpg)) +
+	geom_point(aes(x = pred, y = mpg)) +
+	geom_abline(intercept = 0, slope = 1, color = 'blue')
+
+# Error distribution
+error <- test_predictions - test_labels$mpg
+ggplot(data = data.frame(error = error)) + 
+	geom_density(aes(x = error))
+
+# Save model...
+save_model_tf(dnn_model, './tensorflow/dnn_model')
+reloaded <- load_model_tf('./tensorflow/dnn_model')
+
+test_results[['reloaded']] <-
+	reloaded |>
+	evaluate(as.matrix(test_features),
+					 as.matrix(test_labels),
+					 verbose = 0)
