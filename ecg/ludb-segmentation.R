@@ -20,8 +20,18 @@ data_loc <- function() {
 ludb <- fs::path(data_loc(), 'dsp', 'ludb', 'data')
 
 # Example from patient 1
-dat1 <- read_wfdb(record = '1', record_dir = ludb)
-hea1 <- read_header(record = '1', record_dir = ludb)
-ann1 <- read_annotation(record = '1', record_dir = ludb, annotator = 'i')
+dat_1 <- read_wfdb(record = '1', record_dir = ludb)
+hea_1 <- read_header(record = '1', record_dir = ludb)
+ann_i_1 <- read_annotation(record = '1', record_dir = ludb, annotator = 'i')
 
+ecg <- egm(dat_1[, -1], hea_1, ann_i_1)
 
+ggm(ecg, channels = hea1$label)
+
+# Labeled data
+# 	Take each P, QRS, T wave region and mask that onto original signal
+# 	This would be similar to "one hot encoding" for each
+# 	Would also needed a "background" or ZERO label
+
+# Input will be 5000 x 12 (10 sec samples @ 500 hertz)
+# Output will be 
