@@ -33,8 +33,23 @@ beats <- segmentation(ecg, by = 'sinus')
 
 # Convert to a simple array
 dat <- 
-	beats[[1]]$signal[, -1] |>
-	as.matrix()
+	beats[lengths(beats) != 0] |>
+	lapply(extract_signal, data_format = 'matrix')
 
-array(dat) |> dim()
+# How to PAD them to all be the same length
+# Now each level of this is an ECG beat of the same length
+# This also requires added 
+padded <- pad_sequences(dat, padding = 'post', maxlen = max(lengths(dat))) # This doesn't work right, because it uses the matrix as a flattened vector first
+padded <- pad_sequences(dat, padding = 'post') 
 
+# This needs to be masked later on (layer masking, or embedding with a zero mask)
+masking_layer <- layer_masking()
+unmasked_embedding <- tf$cast(
+	tf$tile(tf$expand_dims(padded, axis = -1L), c(7L, 333L, 12L, 1L)), tf$float32
+) 
+masked_embedding <- masking_layer(unmasked_embedding) # This can be very slow
+
+
+
+# We need to create a label system that matches this
+# This means that the number of beats x the number of labels
