@@ -14,17 +14,9 @@ library(shiva)
 # 	Train = milivolts on multiple leads of an ECG
 # 	Test = labels for each dimension as a sequence (e.g. P wave on to off)
 
-# Data location
-ecg_dir <- 
-	fs::path('~/OneDrive - University of Illinois Chicago/data/aflubber/ecg_data/wes/') |>
-	fs::path_expand()
-ecg_paths <-
-	fs::dir_ls(ecg_dir, glob = '*.ecgpuwave') |>
-	fs::path_ext_remove()
-
 # Sample ECG to work with
-dir <- fs::path_dir(ecg_paths[1])
-rec <- fs::path_file(ecg_paths[1])
+dir <- system.file('extdata', package = 'shiva')
+rec <- fs::path_file('muse-sinus')
 ecg <- shiva::read_wfdb(rec, dir, annotator = 'ecgpuwave')
 ggm(ecg) |>
 	draw_boundary_mask()
@@ -59,26 +51,6 @@ named_labels <- c('blue', 'yellow', 'yellow', 'blue', 'yellow', 'blue', 'yellow'
 labels <- c(0, 1, 1, 0, 1, 0, 1)
 
 # Model definition
-
-	#layer_input(batch_shape = c(7, 12)) |>
-	#layer_masking(masked_embedding) |>
-	#layer_flatten() |>
-	#layer_normalization() |>
-	#layer_dense(units = 128, activation = 'relu') |>
-	#layer_dense(units = 2, activation = 'softmax')
-
-model <- keras_model_sequential() 
-sig <- layer_input(shape = c(333, 12), dtype = 'float32')
-flat <- layer_flatten(input_shape = c(333, 12))
-dense <- layer_dense(units = 64, activation = 'relu')
-
-x <- flat(sig)
-x <- dense(flat(sig))
-
-y <-
-	layer_input(shape = c(333, 12), dtype = 'float32') |>
-	layer_embedding(input_dim = 7, output_dim = 2, mask_zero = TRUE) |>
-	layer_flatten()
 	
 inputs <- layer_input(shape = c(333, 12), dtype = 'float32')
 	
