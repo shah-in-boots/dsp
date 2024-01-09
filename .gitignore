@@ -4,6 +4,8 @@
 .Ruserdata
 .venv
 .venv/*
+.DS_Store
+tensorflow/.DS_Store
 
 # Large datasets
 tensorflow/aclimdb
