@@ -72,7 +72,7 @@ model |>
 		optimizer = 'adam',
 		#loss = loss_sparse_categorical_crossentropy(),
 		loss = 'binary_crossentropy',
-		metrics = 'accuracy'
+		metrics = 'binary_accuracy'
 	)
 
 # Training
