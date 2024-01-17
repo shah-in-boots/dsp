@@ -20,7 +20,6 @@ rec <- fs::path_file('muse-sinus')
 ecg <- shiva::read_wfdb(rec, dir, annotator = 'ecgpuwave')
 ggm(ecg) |>
 	draw_boundary_mask()
-readr::read_lines(fs::path(ecg_paths[1], ext = 'hea'))
 beats <- segmentation(ecg, by = 'sinus')
 
 # Convert to a simple array
@@ -47,21 +46,22 @@ masked_embedding <- masking_layer(unmasked_embedding) # This can be very slow
 # We need to create a label system that matches this
 # This means that the number of beats x the number of labels
 n <- length(dat) 
-named_labels <- c('blue', 'yellow', 'yellow', 'blue', 'yellow', 'blue', 'yellow')
-labels <- c(0, 1, 1, 0, 1, 0, 1)
+named_labels <- c('normal', 'weird')
+labels <- c(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1)
 
 # Model definition
 	
-inputs <- layer_input(shape = c(333, 12), dtype = 'float32')
+inputs <- layer_input(shape = c(271, 12), dtype = 'float32')
 	
 outputs <- 
 	inputs |>
-	#layer_embedding(input_dim = 12, output_dim = 2, mask_zero = TRUE) |>
 	layer_masking() |>
 	layer_flatten() |>
 	layer_normalization() |>
+	layer_dense(units = 271, activation = 'relu') |> 
 	layer_dense(units = 128, activation = 'relu') |>
-	layer_dense(units = 2, activation = 'softmax')
+	layer_dropout(rate = 0.5) |>
+	layer_dense(units = 1, activation = 'sigmoid', name = 'predictions')
 	
 model <- keras_model(inputs = inputs, outputs = outputs, name = 'mdl')
 
@@ -70,7 +70,8 @@ model <- keras_model(inputs = inputs, outputs = outputs, name = 'mdl')
 model |>
 	compile(
 		optimizer = 'adam',
-		loss = loss_sparse_categorical_crossentropy(),
+		#loss = loss_sparse_categorical_crossentropy(),
+		loss = 'binary_crossentropy',
 		metrics = 'accuracy'
 	)
 
