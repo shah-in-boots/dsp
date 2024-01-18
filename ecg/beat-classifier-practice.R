@@ -8,6 +8,8 @@ library(tidymodels)
 library(fs)
 library(shiva)
 
+# Model ----
+
 # Eventually want to train a machine learning model based on this
 # The goal is to create a clean training and testing dataset
 # Training and test data:
@@ -78,3 +80,7 @@ model |>
 # Training
 history <-
 	model |> fit(padded, labels, epochs = 30, verbose = 2)
+
+
+# ECG Intake Layer ----
+
