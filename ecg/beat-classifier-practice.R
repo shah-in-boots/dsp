@@ -81,6 +81,11 @@ model |>
 history <-
 	model |> fit(padded, labels, epochs = 30, verbose = 2)
 
+# Approach ----
 
-# ECG Intake Layer ----
-
+# First take an ECG and segment it into beats
+# Then, taking the sinus beats 
+# Come up with a total set length of hte data (e.g. 500 samples)
+# Tne, for each beat, center around R complex
+# Pad left and right sides to fit center of R
+# This should be done in {shiva}
