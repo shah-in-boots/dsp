@@ -150,6 +150,11 @@ heatmap <- tf$maximum(heatmap, 0) / tf$reduce_max(heatmap)
 heatmap <- as.array(heatmap)
 heatmap <- array_reshape(heatmap, c(500, 1))
 
+plot(heatmap, type = "l", main = "Grad-CAM Heatmap")
+
+
+
+
 
 # Function to compute Grad-CAM
 compute_gradcam <- function(model, img_array, last_conv_layer_name, pred_index = NULL) {
