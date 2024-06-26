@@ -281,7 +281,7 @@ median_long$Gradient[median_long$Amplitude == 0] <- 0
 ggplot(median_long, aes(x = Time, y = Amplitude, color = Lead)) +
   # facet_wrap(~Lead) +
   geom_vline(aes(xintercept = Time, alpha = Gradient), linewidth = 2, color = "indianred") +
-  geom_line(linewidth = 1.0) +
+  geom_line(linewidth = 1.0) + 
   labs(title = "Median Beat for Each Lead at Each Time Point", x = "Time", y = "Amplitude") +
   scale_color_viridis_d(option = "mako") +
   scale_alpha_identity() +
