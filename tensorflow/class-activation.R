@@ -2,7 +2,7 @@
 library(reticulate)
 library(tensorflow)
 library(tfdatasets)
-library(keras)
+library(keras3)
 library(tidyverse)
 library(tidymodels)
 library(abind)
@@ -10,10 +10,12 @@ EGM:::set_wfdb_path("/usr/local/bin")
 library(EGM)
 
 # Training dataset
-tbl <- targets::tar_read(ttn_train_dataset, store = "~/OneDrive - University of Illinois Chicago/targets/aflubber/")
+tbl <- targets::tar_read(ttn_train_dataset, store = "~/OneDrive - University of Utah/targets/aflubber/")
 
 # For class weights
+tbl <- slice_sample(tbl, n = 5000)
 shuffleInd <- sample(nrow(tbl))
+n <- nrow(tbl)
 xa <-
   tbl$x[shuffleInd, drop = FALSE] |>
   abind::abind(along = 3) |>
@@ -23,63 +25,69 @@ ya <- tbl$y[shuffleInd, drop = FALSE] |> as.array()
 
 # Model by Van De Leur ----
 
-vmdl <-
-  keras_model_sequential() |>
-  layer_masking() |>
+inputs <- layer_input(shape = c(500, 12, 1))
+outputs <-
+  inputs |> 
   # Block 1
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 1, padding = "causal", input_shape = c(500, 12)) |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(1, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 2
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 2, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(2, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 3
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 4, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(4, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 4
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 8, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(8, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 5
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 16, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(16, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 6
-  layer_conv_1d(filters = 128, kernel_size = 3, dilation_rate = 32, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(32, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Block 7
-  layer_conv_1d(filters = 256, kernel_size = 3, dilation_rate = 64, padding = "causal") |>
+  layer_conv_2d(filters = 128, kernel_size = c(3, 1), dilation_rate = c(64, 1), padding = "same") |>
   layer_batch_normalization() |>
-  layer_activation_leaky_relu(alpha = 0.01) |>
-  # LSTM
-  layer_lstm(units = 64, return_sequences = TRUE) |>
+  layer_activation_leaky_relu(negative_slope = 0.01) |>
   # Global max pooling
-  layer_global_max_pooling_1d() |>
+  layer_global_max_pooling_2d() |>
   # Dense layer for output
   layer_dense(units = 1, activation = "sigmoid")
 
+vmdl <- keras_model(inputs = inputs, outputs = outputs)
+
 # Compile the model
 vmdl |>
-  keras::compile(
-    optimizer = optimizer_adam(learning_rate = 0.0001),
-    loss = keras::loss_binary_crossentropy(),
+  keras3::compile(
+    optimizer = optimizer_adam(learning_rate = 0.0001), 
+    loss = keras3::loss_binary_crossentropy(),
     metrics = list(
-      keras::metric_binary_accuracy(name = "acc"),
-      keras::metric_true_negatives(name = "tn"),
-      keras::metric_true_positives(name = "tp"),
-      keras::metric_false_negatives(name = "fn"),
-      keras::metric_false_positives(name = "fp"),
-      keras::metric_auc(name = "auc")
+      keras3::metric_binary_accuracy(name = "acc"),
+      keras3::metric_true_negatives(name = "tn"),
+      keras3::metric_true_positives(name = "tp"),
+      keras3::metric_false_negatives(name = "fn"),
+      keras3::metric_false_positives(name = "fp"),
+      keras3::metric_auc(name = "auc")
     )
   )
 
 class_wt <- list(
-  "0" = 1 / sum(ya == 0),
-  "1" = 1 / sum(ya == 1)
+  "0" = 1,
+  "1" = sum(ya == 0) / sum(ya == 1)
 )
+
+class_wt <- list(
+	"0" = 1 / sum(ya == 0),
+	"1" = 1 / sum(ya == 1)
+)
+
 
 history <-
   vmdl |>
@@ -87,6 +95,7 @@ history <-
     x = xa,
     y = ya,
     validation_split = 0.2,
+    batch_size = 128,
     epochs = 10,
     class_weight = class_wt,
     callbacks = list(
@@ -96,7 +105,7 @@ history <-
   )
 
 # Test model fit
-dat <- targets::tar_read(ttn_test_dataset, store = "~/OneDrive - University of Illinois Chicago/targets/aflubber/")
+dat <- targets::tar_read(ttn_test_dataset, store = "~/OneDrive - University of Utah/targets/aflubber/")
 xt <-
   dat$x |>
   abind::abind(along = 3) |>
@@ -111,7 +120,7 @@ y_pred <- ifelse(predictions > 0.5, 1, 0)
 
 # Optionally, you can use the `confusionMatrix` function from the `caret` package for more details
 confusion_matrix_details <- 
-	caret::confusionMatrix(as.factor(y_pred), as.factor(yt))
+	caret::confusionMatrix(as.factor(y_pred), as.factor(yt), positive = "1")
 print(confusion_matrix_details)
 
 # Grad-CAM ----
