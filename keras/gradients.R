@@ -1,3 +1,6 @@
+# This is hte file that I have most recently used to train the model
+# Last run 2025-04-20
+
 # Model training for gradients ----
 library(reticulate)
 library(tensorflow)
@@ -115,10 +118,13 @@ confusion_matrix_details <-
 	caret::confusionMatrix(as.factor(y_pred), as.factor(yt), positive = "1")
 print(confusion_matrix_details)
 
+# Save model 
+keras3::save_model(vmdl, "keras/ttn_model.keras", overwrite = TRUE)
+
 # Gradient computation ----
 
 vmdl <- keras3::load_model("keras/ttn_model.keras")
-vmdl <- keras3::load_model("keras/ttn_model_full.keras")
+#vmdl <- keras3::load_model("keras/ttn_model_full.keras")
 
 compute_gradients <- function(keras_mdl, layer_name, input_array) {
 	
@@ -262,8 +268,6 @@ beatGradients <-
 	inner_join(gradData, by = c("time", "lead")) |>
 	mutate(lead = factor(lead, levels = c("I", "AVR", "V1", "V4", "II", "AVL", "V2", "V5", "III", "AVF", "V3", "V6")))
 
-
-
 ggplot(data = beatGradients) +
   # Add gradient background stripes
   geom_tile(aes(x = time, y = 0, fill = abs(gradient)), 
@@ -296,9 +300,9 @@ ggplot(data = beatGradients) +
 # Fill teh line by the gradient
 ggplot(data = beatGradients, aes(x = time, y = case, group = lead)) +
 	# Create a line for each lead where the color intensity varies by gradient
-	geom_line(aes(y = case), color = "#000000", linewidth = 0.5) + 
+	geom_line(aes(y = case), color = "#000000", linewidth = 1.0) + 
 	# Add control lines in a lighter color
-	geom_line(aes(y = control), color = "#000000", linewidth = 0.5, alpha = 0.5) +
+	geom_line(aes(y = control), color = "#000000", linewidth = 1.0, alpha = 0.5) +
 	geom_line(data = filter(beatGradients, gradient > 0.05),
             aes(x = time, y = case), 
             color = "#FEAB4D", 
@@ -319,5 +323,6 @@ ggplot(data = beatGradients, aes(x = time, y = case, group = lead)) +
     axis.ticks = element_blank(),
     axis.title = element_blank()
 	) 
+
 
 
